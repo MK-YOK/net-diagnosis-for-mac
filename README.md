@@ -26,6 +26,9 @@ excludes cloud storage quota from its scope.
 - Everything is read-only diagnostics — nothing here changes network
   settings or restarts anything. Physical actions (like restarting a router)
   are left as a recommendation with an explicit confirmation step.
+- Logs a row of latency/loss numbers to `logs/history.csv` on every run, so
+  repeated runs build up a time series — see
+  [Tracking trends over time](#tracking-trends-over-time).
 
 ## Requirements
 
@@ -68,14 +71,36 @@ Or run individual checks:
 See [CLAUDE.md](CLAUDE.md) for how to read the output (which failure pattern
 points to a router problem vs. DNS vs. an ISP-side outage).
 
+## Tracking trends over time
+
+Every `run.sh` pass appends one row (timestamp, gateway/external latency and
+packet loss, DNS status, Wi-Fi RSSI/noise/channel if applicable) to
+`logs/history.csv`. That file is gitignored — it's local, machine-specific
+history, not something to commit. It builds up only from runs you actually
+do; there's no background/cron collection.
+
+To see the trend (e.g. "has it actually gotten slower lately, or does it
+just feel that way"):
+
+```bash
+./scripts/net-history-report.sh        # last 20 runs + latest vs. prior average
+./scripts/net-history-report.sh 50     # last 50 runs
+```
+
+The report flags the latest run's latency/loss against the average of all
+prior runs so a real regression shows up as a number, not a guess.
+
 ## Repo structure
 
 ```
 CLAUDE.md                       playbook: what to run and how to interpret it
-scripts/run.sh                  driver: runs the three scripts below in order
+scripts/run.sh                  driver: runs the checks below, then logs the result
 scripts/net-interface-check.sh  read-only: active interface/link/IP
 scripts/net-connectivity-check.sh  read-only: gateway/DNS/external reachability
 scripts/net-wifi-check.sh       read-only: Wi-Fi signal/quality
+scripts/net-log-run.sh          appends one CSV row per run to logs/history.csv
+scripts/net-history-report.sh   summarizes logs/history.csv and flags trends
+logs/history.csv                time series of past runs (gitignored)
 ```
 
 ## License

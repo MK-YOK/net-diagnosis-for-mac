@@ -31,7 +31,30 @@ This runs three read-only checks, in order:
 3. **Wi-Fi check** — signal strength, noise, and channel, if the active
    interface is Wi-Fi (harmless no-op on Ethernet).
 
-Nothing here is destructive or even mutating — it's all read-only diagnostics.
+Nothing here is destructive or even mutating, aside from appending one row
+of results to `logs/history.csv` (gitignored, local only) — see below.
+
+## Checking trends over time
+
+Each `run.sh` pass logs a row (timestamp, gateway/external latency and
+packet loss, DNS status, Wi-Fi RSSI/noise/channel) to `logs/history.csv`.
+History only accumulates from runs the user actually triggers — there's no
+background collection, so early on there may be too little data for a
+trend.
+
+When the user asks something like "has this gotten slower lately" or "is
+this new" rather than just "why is it broken right now", run
+`./scripts/net-history-report.sh` and use it alongside the current pass:
+
+- If latency/loss in the report is flagged notably higher than the prior
+  average *and* the current pass shows a live problem, treat this as an
+  ongoing degradation, not a one-off — worth surfacing in the summary even
+  if the current pass alone would look borderline.
+- If the report shows no notable change from history, don't manufacture a
+  trend narrative — just say current numbers are in line with the recent
+  baseline.
+- If there's fewer than ~3-5 rows of history, say so rather than drawing a
+  conclusion from noise.
 
 ## Interpreting the output
 
