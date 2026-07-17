@@ -25,3 +25,15 @@ parse_duration() {
     *) printf '%s\n' "$num" ;;
   esac
 }
+
+# exceeds <value> <threshold> : return 0 (true) if value > threshold.
+# value may be "n/a" (avg when 100% loss) or empty → NOT exceeding (the loss
+# check catches those cases). Non-numeric values are treated as not exceeding.
+exceeds() {
+  local value="$1" threshold="$2"
+  case "$value" in
+    ''|n/a) return 1 ;;
+    *[!0-9.]*) return 1 ;;
+  esac
+  awk -v v="$value" -v t="$threshold" 'BEGIN { exit !(v > t) }'
+}

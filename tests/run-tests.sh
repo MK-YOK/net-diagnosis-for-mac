@@ -35,5 +35,13 @@ assert_false "parse_duration rejects abc" parse_duration abc
 assert_false "parse_duration rejects empty" parse_duration ""
 assert_false "parse_duration rejects 5x" parse_duration 5x
 
+# --- exceeds <value> <threshold> : true when value > threshold ---
+assert_true  "exceeds 312 > 50"      exceeds 312 50
+assert_false "exceeds 10 not > 50"   exceeds 10 50
+assert_false "exceeds equal not >"   exceeds 50 50
+assert_true  "exceeds 0.1 > 0"       exceeds 0.1 0
+assert_false "exceeds n/a not >"     exceeds n/a 50
+assert_false "exceeds empty not >"   exceeds "" 50
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
