@@ -9,8 +9,8 @@ PASS=0; FAIL=0
 pass() { PASS=$((PASS+1)); }
 fail() { FAIL=$((FAIL+1)); echo "FAIL: $1"; }
 assert_eq()    { if [ "$2" = "$3" ]; then pass; else fail "$1 — expected [$2] got [$3]"; fi; }
-assert_true()  { d="$1"; shift; if "$@"; then pass; else fail "$d (expected success)"; fi; }
-assert_false() { d="$1"; shift; if "$@"; then fail "$d (expected failure)"; else pass; fi; }
+assert_true()  { local d="$1"; shift; if "$@"; then pass; else fail "$d (expected success)"; fi; }
+assert_false() { local d="$1"; shift; if "$@"; then fail "$d (expected failure)"; else pass; fi; }
 
 # --- ping_loss / ping_avg (stdin parsers) ---
 GW_SAMPLE='PING 192.168.0.1: 56 data bytes
@@ -56,6 +56,22 @@ $(ping_probe 127.0.0.1 2)
 PBEOF
 assert_eq "loopback loss is 0.0" "0.0" "$PB_LOSS"
 assert_false "loopback avg is numeric (not n/a)" [ "$PB_AVG" = "n/a" ]
+
+# --- ping_probe timeout must scale with count (regression: fixed -t 5 truncated) ---
+PING_ARGS_FILE=$(mktemp)
+ping() {
+  printf '%s\n' "$*" > "$PING_ARGS_FILE"
+  cat <<'FAKEPING'
+--- fakehost ping statistics ---
+6 packets transmitted, 6 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 1.0/2.0/3.0/0.1 ms
+FAKEPING
+}
+ping_probe fakehost 6 >/dev/null
+unset -f ping
+TVAL=$(grep -oE '\-t [0-9]+' "$PING_ARGS_FILE" | grep -oE '[0-9]+$')
+assert_true "ping_probe -t scales with count (>=6)" [ "${TVAL:-0}" -ge 6 ]
+rm -f "$PING_ARGS_FILE"
 
 # --- load_thresholds : env > conf > built-in fallback ---
 LIB="$PWD/../scripts/lib/net-common.sh"   # $PWD is tests/ (harness cd'd here)

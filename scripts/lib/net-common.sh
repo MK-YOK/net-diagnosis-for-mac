@@ -29,6 +29,8 @@ parse_duration() {
 # exceeds <value> <threshold> : return 0 (true) if value > threshold.
 # value may be "n/a" (avg when 100% loss) or empty → NOT exceeding (the loss
 # check catches those cases). Non-numeric values are treated as not exceeding.
+# The guard rejects obvious non-numerics; it does not fully validate number
+# format (callers only pass single decimals).
 exceeds() {
   local value="$1" threshold="$2"
   case "$value" in
@@ -65,7 +67,7 @@ default_route_class() {
 # defaults to "100" if the summary can't be parsed at all (e.g. unknown host).
 ping_probe() {
   local host="$1" count="$2" out loss avg
-  out=$(ping -c "$count" -t 5 "$host" 2>&1)
+  out=$(ping -c "$count" -t "$((count + 3))" "$host" 2>&1)
   loss=$(printf '%s\n' "$out" | ping_loss)
   avg=$(printf '%s\n' "$out" | ping_avg)
   [ -z "$loss" ] && loss="100"
@@ -78,6 +80,9 @@ ping_probe() {
 # gateway line, so we ask the active hardware interface for its router.
 # Honors an explicit GATEWAY override (from net-monitor.conf / env).
 # Returns 1 (no output) if none found.
+# Caveat: on multi-homed setups (e.g. Wi-Fi + USB-Ethernet both up) this
+# picks the first active en* by enumeration order, which may not be the
+# interface actually carrying traffic. Fine for a single-link laptop.
 physical_gateway() {
   local iface router
   if [ -n "${GATEWAY:-}" ]; then printf '%s\n' "$GATEWAY"; return 0; fi
