@@ -11,3 +11,17 @@
 # These are stdin FILTERS — they do not run ping themselves.
 ping_loss() { grep -oE '[0-9.]+% packet loss' | grep -oE '^[0-9.]+'; }
 ping_avg()  { grep 'round-trip' | sed -E 's#.*= [0-9.]+/([0-9.]+)/.*#\1#'; }
+
+# parse_duration <str> : echo the duration in seconds, or return 1 on bad input.
+# Accepts "30m", "45s", "2h", or bare seconds like "90".
+parse_duration() {
+  local s="$1" num unit
+  printf '%s' "$s" | grep -qE '^[0-9]+[smh]?$' || return 1
+  num=$(printf '%s' "$s" | grep -oE '^[0-9]+')
+  unit=$(printf '%s' "$s" | grep -oE '[smh]$')
+  case "$unit" in
+    m) printf '%s\n' "$((num * 60))" ;;
+    h) printf '%s\n' "$((num * 3600))" ;;
+    *) printf '%s\n' "$num" ;;
+  esac
+}

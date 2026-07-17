@@ -26,5 +26,14 @@ LOSS_SAMPLE='--- 1.1.1.1 ping statistics ---
 round-trip min/avg/max/stddev = 10.0/20.0/30.0/5.0 ms'
 assert_eq "ping_loss parses 40.0%" "40.0" "$(printf '%s\n' "$LOSS_SAMPLE" | ping_loss)"
 
+# --- parse_duration ---
+assert_eq "parse_duration 30m"  "1800" "$(parse_duration 30m)"
+assert_eq "parse_duration 45s"  "45"   "$(parse_duration 45s)"
+assert_eq "parse_duration 2h"   "7200" "$(parse_duration 2h)"
+assert_eq "parse_duration 90"   "90"   "$(parse_duration 90)"
+assert_false "parse_duration rejects abc" parse_duration abc
+assert_false "parse_duration rejects empty" parse_duration ""
+assert_false "parse_duration rejects 5x" parse_duration 5x
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
