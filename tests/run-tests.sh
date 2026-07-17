@@ -43,5 +43,12 @@ assert_true  "exceeds 0.1 > 0"       exceeds 0.1 0
 assert_false "exceeds n/a not >"     exceeds n/a 50
 assert_false "exceeds empty not >"   exceeds "" 50
 
+# --- classify_route <iface> <cato_present 0|1> : pure classifier ---
+assert_eq "utun + cato -> cato"   "cato"    "$(classify_route utun5 1)"
+assert_eq "utun no cato -> vpn"   "vpn"     "$(classify_route utun5 0)"
+assert_eq "en0 -> direct"         "direct"  "$(classify_route en0 0)"
+assert_eq "en0 + cato -> direct"  "direct"  "$(classify_route en0 1)"
+assert_eq "empty iface -> unknown" "unknown" "$(classify_route "" 0)"
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

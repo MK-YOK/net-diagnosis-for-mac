@@ -37,3 +37,25 @@ exceeds() {
   esac
   awk -v v="$value" -v t="$threshold" 'BEGIN { exit !(v > t) }'
 }
+
+# classify_route <iface> <cato_present> : pure classifier.
+# cato_present is "1" when a Cato client process is running, else "0".
+# -> cato | vpn | direct | unknown
+classify_route() {
+  local iface="$1" cato="$2"
+  if [ -z "$iface" ]; then printf 'unknown\n'; return; fi
+  case "$iface" in
+    utun*)
+      if [ "$cato" = "1" ]; then printf 'cato\n'; else printf 'vpn\n'; fi
+      ;;
+    *) printf 'direct\n' ;;
+  esac
+}
+
+# default_route_class : wire the real route/pgrep commands into classify_route.
+default_route_class() {
+  local iface cato=0
+  iface=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')
+  if pgrep -f CatoClient >/dev/null 2>&1; then cato=1; fi
+  classify_route "$iface" "$cato"
+}
