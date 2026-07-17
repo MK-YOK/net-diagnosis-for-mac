@@ -645,8 +645,9 @@ mkdir -p "$LOG_DIR"
 if [ ! -f "$LOG_FILE" ]; then
   echo "$HEADER" > "$LOG_FILE"
 elif [ "$(head -1 "$LOG_FILE")" = "$OLD_HEADER" ]; then
-  # migrate old 16-col header to the new 17-col header, keep existing rows
-  tmpf=$(mktemp)
+  # migrate old 16-col header to the new 17-col header, keep existing rows.
+  # temp file lives in LOG_DIR so the mv is a same-filesystem atomic rename.
+  tmpf=$(mktemp "$LOG_DIR/.history.csv.XXXXXX")
   { echo "$HEADER"; tail -n +2 "$LOG_FILE"; } > "$tmpf" && mv "$tmpf" "$LOG_FILE"
 fi
 
@@ -734,6 +735,10 @@ REAL="../logs/history.csv"
 mkdir -p ../logs
 BAK=""
 if [ -f "$REAL" ]; then BAK=$(mktemp); cp "$REAL" "$BAK"; fi
+# Guard the real history file: restore on normal end AND on interruption
+# (Ctrl-C/crash) so the test can never clobber the user's real trend data.
+restore_hist() { if [ -n "$BAK" ]; then mv "$BAK" "$REAL"; else rm -f "$REAL"; fi; }
+trap restore_hist EXIT
 cat > "$REAL" <<'REPEOF'
 timestamp,interface,link_status,has_ip,gateway_ip,gateway_loss_pct,gateway_avg_ms,dns_ok,dns_query_ms,ext_ip_loss_pct,ext_ip_avg_ms,ext_host_loss_pct,ext_host_avg_ms,wifi_rssi,wifi_noise,wifi_channel,default_route
 2026-01-01T00:00:00Z,en0,active,1,192.168.0.1,0.0,2.0,1,5,0.0,10.0,0.0,12.0,-55,-90,36
@@ -742,7 +747,8 @@ REPEOF
 OUT=$(../scripts/net-history-report.sh 2>&1); RC=$?
 assert_eq "report exits 0 on n/a + mixed rows" "0" "$RC"
 if printf '%s' "$OUT" | grep -qi 'awk:'; then fail "report emitted an awk error"; else pass; fi
-if [ -n "$BAK" ]; then mv "$BAK" "$REAL"; else rm -f "$REAL"; fi
+restore_hist
+trap - EXIT
 ```
 
 - [ ] **Step 2: Run test to verify current behavior**
