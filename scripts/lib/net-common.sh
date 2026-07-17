@@ -72,3 +72,21 @@ ping_probe() {
   [ -z "$avg" ] && avg="n/a"
   printf '%s %s\n' "$loss" "$avg"
 }
+
+# physical_gateway : echo the physical LAN router IP, independent of any VPN.
+# When Cato holds the default route via utun, `route -n get default` has no
+# gateway line, so we ask the active hardware interface for its router.
+# Honors an explicit GATEWAY override (from net-monitor.conf / env).
+# Returns 1 (no output) if none found.
+physical_gateway() {
+  local iface router
+  if [ -n "${GATEWAY:-}" ]; then printf '%s\n' "$GATEWAY"; return 0; fi
+  for iface in $(ifconfig -l 2>/dev/null); do
+    case "$iface" in en*) ;; *) continue ;; esac
+    ifconfig "$iface" 2>/dev/null | grep -q 'status: active' || continue
+    ifconfig "$iface" 2>/dev/null | grep -q 'inet ' || continue
+    router=$(ipconfig getoption "$iface" router 2>/dev/null)
+    if [ -n "$router" ]; then printf '%s\n' "$router"; return 0; fi
+  done
+  return 1
+}
