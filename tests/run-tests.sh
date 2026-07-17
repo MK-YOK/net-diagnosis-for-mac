@@ -95,5 +95,18 @@ assert_eq "built-in EXT_SPIKE_MS fallback" "150" "$V"
 
 rm -rf "$CONF_DIR"
 
+# --- 16->17 col header migration (logic mirrored from net-log-run.sh) ---
+OLD_HEADER='timestamp,interface,link_status,has_ip,gateway_ip,gateway_loss_pct,gateway_avg_ms,dns_ok,dns_query_ms,ext_ip_loss_pct,ext_ip_avg_ms,ext_host_loss_pct,ext_host_avg_ms,wifi_rssi,wifi_noise,wifi_channel'
+NEW_HEADER="$OLD_HEADER,default_route"
+MIG_DIR=$(mktemp -d)
+printf '%s\n%s\n' "$OLD_HEADER" "2026-01-01T00:00:00Z,en0,active,1,192.168.0.1,0.0,2.0,1,5,0.0,10.0,0.0,12.0,-55,-90,36" > "$MIG_DIR/history.csv"
+# migration one-liner:
+if [ "$(head -1 "$MIG_DIR/history.csv")" = "$OLD_HEADER" ]; then
+  tmpf=$(mktemp); { echo "$NEW_HEADER"; tail -n +2 "$MIG_DIR/history.csv"; } > "$tmpf" && mv "$tmpf" "$MIG_DIR/history.csv"
+fi
+assert_eq "header migrated to 17 cols" "$NEW_HEADER" "$(head -1 "$MIG_DIR/history.csv")"
+assert_eq "old data row preserved" "2" "$(wc -l < "$MIG_DIR/history.csv" | tr -d ' ')"
+rm -rf "$MIG_DIR"
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]
