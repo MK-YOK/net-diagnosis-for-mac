@@ -113,6 +113,8 @@ REAL="../logs/history.csv"
 mkdir -p ../logs
 BAK=""
 if [ -f "$REAL" ]; then BAK=$(mktemp); cp "$REAL" "$BAK"; fi
+restore_hist() { if [ -n "$BAK" ]; then mv "$BAK" "$REAL"; else rm -f "$REAL"; fi; }
+trap restore_hist EXIT
 cat > "$REAL" <<'REPEOF'
 timestamp,interface,link_status,has_ip,gateway_ip,gateway_loss_pct,gateway_avg_ms,dns_ok,dns_query_ms,ext_ip_loss_pct,ext_ip_avg_ms,ext_host_loss_pct,ext_host_avg_ms,wifi_rssi,wifi_noise,wifi_channel,default_route
 2026-01-01T00:00:00Z,en0,active,1,192.168.0.1,0.0,2.0,1,5,0.0,10.0,0.0,12.0,-55,-90,36
@@ -121,7 +123,8 @@ REPEOF
 OUT=$(../scripts/net-history-report.sh 2>&1); RC=$?
 assert_eq "report exits 0 on n/a + mixed rows" "0" "$RC"
 if printf '%s' "$OUT" | grep -qi 'awk:'; then fail "report emitted an awk error"; else pass; fi
-if [ -n "$BAK" ]; then mv "$BAK" "$REAL"; else rm -f "$REAL"; fi
+restore_hist
+trap - EXIT
 
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

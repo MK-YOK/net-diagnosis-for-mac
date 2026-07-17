@@ -20,7 +20,7 @@ if [ ! -f "$LOG_FILE" ]; then
   echo "$HEADER" > "$LOG_FILE"
 elif [ "$(head -1 "$LOG_FILE")" = "$OLD_HEADER" ]; then
   # migrate old 16-col header to the new 17-col header, keep existing rows
-  tmpf=$(mktemp)
+  tmpf=$(mktemp "$LOG_DIR/.history.csv.XXXXXX")
   { echo "$HEADER"; tail -n +2 "$LOG_FILE"; } > "$tmpf" && mv "$tmpf" "$LOG_FILE"
 fi
 
