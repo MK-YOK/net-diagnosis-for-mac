@@ -1,0 +1,30 @@
+#!/bin/bash
+# Zero-dependency test harness for scripts/lib/net-common.sh pure helpers.
+# No bats/framework. Run: ./tests/run-tests.sh   (exit 0 = all pass)
+set -uo pipefail
+cd "$(dirname "$0")" || exit 1
+. "../scripts/lib/net-common.sh"
+
+PASS=0; FAIL=0
+pass() { PASS=$((PASS+1)); }
+fail() { FAIL=$((FAIL+1)); echo "FAIL: $1"; }
+assert_eq()    { if [ "$2" = "$3" ]; then pass; else fail "$1 — expected [$2] got [$3]"; fi; }
+assert_true()  { d="$1"; shift; if "$@"; then pass; else fail "$d (expected success)"; fi; }
+assert_false() { d="$1"; shift; if "$@"; then fail "$d (expected failure)"; else pass; fi; }
+
+# --- ping_loss / ping_avg (stdin parsers) ---
+GW_SAMPLE='PING 192.168.0.1: 56 data bytes
+64 bytes from 192.168.0.1: icmp_seq=0 ttl=64 time=2.1 ms
+--- 192.168.0.1 ping statistics ---
+3 packets transmitted, 3 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 1.9/2.4/3.1/0.5 ms'
+assert_eq "ping_loss parses 0.0%" "0.0" "$(printf '%s\n' "$GW_SAMPLE" | ping_loss)"
+assert_eq "ping_avg parses 2.4"   "2.4" "$(printf '%s\n' "$GW_SAMPLE" | ping_avg)"
+
+LOSS_SAMPLE='--- 1.1.1.1 ping statistics ---
+5 packets transmitted, 3 packets received, 40.0% packet loss
+round-trip min/avg/max/stddev = 10.0/20.0/30.0/5.0 ms'
+assert_eq "ping_loss parses 40.0%" "40.0" "$(printf '%s\n' "$LOSS_SAMPLE" | ping_loss)"
+
+echo "PASS=$PASS FAIL=$FAIL"
+[ "$FAIL" -eq 0 ]
