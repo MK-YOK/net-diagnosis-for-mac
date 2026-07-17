@@ -57,5 +57,27 @@ PBEOF
 assert_eq "loopback loss is 0.0" "0.0" "$PB_LOSS"
 assert_false "loopback avg is numeric (not n/a)" [ "$PB_AVG" = "n/a" ]
 
+# --- load_thresholds : env > conf > built-in fallback ---
+LIB="$PWD/../scripts/lib/net-common.sh"   # $PWD is tests/ (harness cd'd here)
+CONF_DIR=$(mktemp -d)
+cat > "$CONF_DIR/net-monitor.conf" <<'CONFEOF'
+: "${GW_SPIKE_MS:=77}"
+: "${PING_COUNT:=9}"
+CONFEOF
+
+# conf wins when env is unset
+V=$( cd "$CONF_DIR" && . "$LIB" && load_thresholds && echo "$GW_SPIKE_MS" )
+assert_eq "conf sets GW_SPIKE_MS" "77" "$V"
+
+# env wins over conf
+V=$( cd "$CONF_DIR" && export GW_SPIKE_MS=30 && . "$LIB" && load_thresholds && echo "$GW_SPIKE_MS" )
+assert_eq "env overrides conf" "30" "$V"
+
+# built-in fallback for a key not present in the conf (EXT_SPIKE_MS)
+V=$( cd "$CONF_DIR" && . "$LIB" && load_thresholds && echo "$EXT_SPIKE_MS" )
+assert_eq "built-in EXT_SPIKE_MS fallback" "150" "$V"
+
+rm -rf "$CONF_DIR"
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

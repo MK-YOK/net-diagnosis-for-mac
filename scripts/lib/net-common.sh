@@ -90,3 +90,18 @@ physical_gateway() {
   done
   return 1
 }
+
+# load_thresholds : populate threshold/tick vars with precedence
+#   env (already set) > ./net-monitor.conf > built-in fallback below.
+# Callers cd into scripts/ first, so the conf is at ./net-monitor.conf.
+# All three layers use guarded assignment, so an already-set env var is never
+# overwritten by the conf or the fallback.
+load_thresholds() {
+  if [ -f "./net-monitor.conf" ]; then . "./net-monitor.conf"; fi
+  : "${GW_SPIKE_MS:=50}"
+  : "${GW_LOSS_PCT:=0}"
+  : "${EXT_SPIKE_MS:=150}"
+  : "${EXT_LOSS_PCT:=0}"
+  : "${PING_COUNT:=5}"
+  : "${GATEWAY:=}"
+}
