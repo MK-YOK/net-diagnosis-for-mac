@@ -50,5 +50,12 @@ assert_eq "en0 -> direct"         "direct"  "$(classify_route en0 0)"
 assert_eq "en0 + cato -> direct"  "direct"  "$(classify_route en0 1)"
 assert_eq "empty iface -> unknown" "unknown" "$(classify_route "" 0)"
 
+# --- ping_probe <host> <count> : "LOSS AVG" from one ping sample ---
+read PB_LOSS PB_AVG <<PBEOF
+$(ping_probe 127.0.0.1 2)
+PBEOF
+assert_eq "loopback loss is 0.0" "0.0" "$PB_LOSS"
+assert_false "loopback avg is numeric (not n/a)" [ "$PB_AVG" = "n/a" ]
+
 echo "PASS=$PASS FAIL=$FAIL"
 [ "$FAIL" -eq 0 ]

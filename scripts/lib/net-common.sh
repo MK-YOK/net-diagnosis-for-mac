@@ -59,3 +59,16 @@ default_route_class() {
   if pgrep -f CatoClient >/dev/null 2>&1; then cato=1; fi
   classify_route "$iface" "$cato"
 }
+
+# ping_probe <host> <count> : run ONE ping batch and echo "LOSS AVG" derived
+# from the same sample. AVG is "n/a" when nothing returned (100% loss); LOSS
+# defaults to "100" if the summary can't be parsed at all (e.g. unknown host).
+ping_probe() {
+  local host="$1" count="$2" out loss avg
+  out=$(ping -c "$count" -t 5 "$host" 2>&1)
+  loss=$(printf '%s\n' "$out" | ping_loss)
+  avg=$(printf '%s\n' "$out" | ping_avg)
+  [ -z "$loss" ] && loss="100"
+  [ -z "$avg" ] && avg="n/a"
+  printf '%s %s\n' "$loss" "$avg"
+}
