@@ -303,6 +303,24 @@ $(ping_probe 127.0.0.1 2)
 PBEOF
 assert_eq "loopback loss is 0.0" "0.0" "$PB_LOSS"
 assert_false "loopback avg is numeric (not n/a)" [ "$PB_AVG" = "n/a" ]
+
+# --- ping_probe timeout must scale with count (regression: a fixed -t 5 would
+#     truncate the run to ~5 packets and report a clean result). Shadow `ping`
+#     to capture its args, so this is network-independent.
+PING_ARGS_FILE=$(mktemp)
+ping() {
+  printf '%s\n' "$*" > "$PING_ARGS_FILE"
+  cat <<'FAKEPING'
+--- fakehost ping statistics ---
+6 packets transmitted, 6 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 1.0/2.0/3.0/0.1 ms
+FAKEPING
+}
+ping_probe fakehost 6 >/dev/null
+unset -f ping
+TVAL=$(grep -oE '\-t [0-9]+' "$PING_ARGS_FILE" | grep -oE '[0-9]+$')
+assert_true "ping_probe -t scales with count (>=6)" [ "${TVAL:-0}" -ge 6 ]
+rm -f "$PING_ARGS_FILE"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -316,9 +334,11 @@ Expected: FAIL lines for the `ping_probe` asserts (`ping_probe: command not foun
 # ping_probe <host> <count> : run ONE ping batch and echo "LOSS AVG" derived
 # from the same sample. AVG is "n/a" when nothing returned (100% loss); LOSS
 # defaults to "100" if the summary can't be parsed at all (e.g. unknown host).
+# The overall timeout scales with count (macOS -t is a whole-run deadline), so
+# a larger PING_COUNT is never silently truncated.
 ping_probe() {
   local host="$1" count="$2" out loss avg
-  out=$(ping -c "$count" -t 5 "$host" 2>&1)
+  out=$(ping -c "$count" -t "$((count + 3))" "$host" 2>&1)
   loss=$(printf '%s\n' "$out" | ping_loss)
   avg=$(printf '%s\n' "$out" | ping_avg)
   [ -z "$loss" ] && loss="100"
@@ -330,7 +350,7 @@ ping_probe() {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `./tests/run-tests.sh`
-Expected: `PASS=23 FAIL=0`, exit 0.
+Expected: `PASS=24 FAIL=0`, exit 0.
 
 - [ ] **Step 5: Commit**
 
@@ -462,7 +482,7 @@ load_thresholds() {
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `./tests/run-tests.sh`
-Expected: `PASS=26 FAIL=0`, exit 0.
+Expected: `PASS=27 FAIL=0`, exit 0.
 
 - [ ] **Step 6: Commit**
 
@@ -599,7 +619,7 @@ rm -rf "$MIG_DIR"
 - [ ] **Step 2: Run test to verify it passes as a spec of the behavior**
 
 Run: `./tests/run-tests.sh`
-Expected: `PASS=28 FAIL=0`. (This asserts the migration one-liner is correct before we embed it in the script.)
+Expected: `PASS=29 FAIL=0`. (This asserts the migration one-liner is correct before we embed it in the script.)
 
 - [ ] **Step 3: Rewrite `scripts/net-log-run.sh`** — full file:
 
@@ -759,7 +779,7 @@ The existing `avg()` already skips `arr[i] != ""`, so normalized `n/a`→`""` va
 - [ ] **Step 4: Run test + smoke check**
 
 Run: `./tests/run-tests.sh`
-Expected: `PASS=30 FAIL=0`.
+Expected: `PASS=31 FAIL=0`.
 Then: `./scripts/net-history-report.sh`
 Expected: no `awk:` errors; the last-N table shows the `default_route` column (via `column -t`), and rows with `n/a` avg don't distort the trend deltas.
 
