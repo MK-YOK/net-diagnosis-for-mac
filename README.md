@@ -103,6 +103,16 @@ scripts/net-history-report.sh   summarizes logs/history.csv and flags trends
 logs/history.csv                time series of past runs (gitignored)
 ```
 
+## Disclaimer
+
+This is a personal diagnostic tool, provided as-is with no warranty (see
+[LICENSE](LICENSE)). Everything it runs is read-only diagnostics — it never
+changes network settings, restarts services, or takes any action on its
+own. Any corrective step (like a router restart) is only ever a suggestion
+that a human decides on and carries out. Use on a work Mac is subject to
+your employer's own IT/security policies; check with them before running
+third-party scripts on a managed machine.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
