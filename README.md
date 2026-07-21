@@ -101,15 +101,15 @@ run the monitor to catch it live:
 
 It stays quiet while healthy and prints a timestamped line only when gateway
 or external latency/loss crosses a threshold (configurable in
-`scripts/net-monitor.conf`), tagging each with whether Cato/VPN owned the
+`scripts/net-monitor.conf`), tagging each with whether a VPN owned the
 route at that moment. Anomalies are also written to
 `logs/monitor-YYYYMMDD.log` (gitignored, local only).
 
-## Cato / VPN detection
+## VPN detection
 
-Each `run.sh` now reports whether Cato (or another VPN tunnel) owns the
-default route. It only reports and recommends a manual before/after
-comparison — it never disconnects anything.
+Each `run.sh` now reports whether a VPN tunnel owns the default route. It
+only reports and recommends a manual before/after comparison — it never
+disconnects anything.
 
 ## Repo structure
 

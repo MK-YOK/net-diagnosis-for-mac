@@ -43,12 +43,10 @@ assert_true  "exceeds 0.1 > 0"       exceeds 0.1 0
 assert_false "exceeds n/a not >"     exceeds n/a 50
 assert_false "exceeds empty not >"   exceeds "" 50
 
-# --- classify_route <iface> <cato_present 0|1> : pure classifier ---
-assert_eq "utun + cato -> cato"   "cato"    "$(classify_route utun5 1)"
-assert_eq "utun no cato -> vpn"   "vpn"     "$(classify_route utun5 0)"
-assert_eq "en0 -> direct"         "direct"  "$(classify_route en0 0)"
-assert_eq "en0 + cato -> direct"  "direct"  "$(classify_route en0 1)"
-assert_eq "empty iface -> unknown" "unknown" "$(classify_route "" 0)"
+# --- classify_route <iface> : pure classifier ---
+assert_eq "utun -> vpn"            "vpn"     "$(classify_route utun5)"
+assert_eq "en0 -> direct"          "direct"  "$(classify_route en0)"
+assert_eq "empty iface -> unknown" "unknown" "$(classify_route "")"
 
 # --- ping_probe <host> <count> : "LOSS AVG" from one ping sample ---
 read PB_LOSS PB_AVG <<PBEOF
@@ -118,7 +116,7 @@ trap restore_hist EXIT
 cat > "$REAL" <<'REPEOF'
 timestamp,interface,link_status,has_ip,gateway_ip,gateway_loss_pct,gateway_avg_ms,dns_ok,dns_query_ms,ext_ip_loss_pct,ext_ip_avg_ms,ext_host_loss_pct,ext_host_avg_ms,wifi_rssi,wifi_noise,wifi_channel,default_route
 2026-01-01T00:00:00Z,en0,active,1,192.168.0.1,0.0,2.0,1,5,0.0,10.0,0.0,12.0,-55,-90,36
-2026-01-01T00:05:00Z,utun5,active,1,192.168.0.1,100,n/a,1,5,0.0,20.0,0.0,22.0,-55,-90,36,cato
+2026-01-01T00:05:00Z,utun5,active,1,192.168.0.1,100,n/a,1,5,0.0,20.0,0.0,22.0,-55,-90,36,vpn
 REPEOF
 OUT=$(../scripts/net-history-report.sh 2>&1); RC=$?
 assert_eq "report exits 0 on n/a + mixed rows" "0" "$RC"

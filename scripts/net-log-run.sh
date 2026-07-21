@@ -4,7 +4,7 @@
 # for a human. Called from run.sh on every pass, so history builds up over
 # time — no cron/launchd needed. Read-only aside from appending to that log.
 # Gateway is the PHYSICAL LAN router (see physical_gateway) so the GW figure
-# is meaningful even when a VPN (Cato) owns the default route.
+# is meaningful even when a VPN owns the default route.
 
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
@@ -35,7 +35,7 @@ if [ -n "$IFACE" ]; then
   ifconfig "$IFACE" 2>/dev/null | grep -q "inet " && HAS_IP=1
 fi
 
-# -- default route classification (cato/vpn/direct/unknown) --
+# -- default route classification (vpn/direct/unknown) --
 DEFAULT_ROUTE=$(default_route_class)
 
 # -- gateway: physical LAN router, independent of any VPN default route --

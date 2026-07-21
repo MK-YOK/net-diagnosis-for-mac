@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shared helpers for net-diagnosis-for-mac. SOURCED by entry scripts (run.sh's
-# children, net-cato-check.sh, net-monitor.sh) — never executed directly.
+# children, net-vpn-check.sh, net-monitor.sh) — never executed directly.
 # Read-only; no side effects. Bash 3.2 compatible (macOS system bash).
 #
 # Callers cd into scripts/ first, so ./net-monitor.conf is reachable here.
@@ -40,26 +40,22 @@ exceeds() {
   awk -v v="$value" -v t="$threshold" 'BEGIN { exit !(v > t) }'
 }
 
-# classify_route <iface> <cato_present> : pure classifier.
-# cato_present is "1" when a Cato client process is running, else "0".
-# -> cato | vpn | direct | unknown
+# classify_route <iface> : pure classifier.
+# -> vpn | direct | unknown
 classify_route() {
-  local iface="$1" cato="$2"
+  local iface="$1"
   if [ -z "$iface" ]; then printf 'unknown\n'; return; fi
   case "$iface" in
-    utun*)
-      if [ "$cato" = "1" ]; then printf 'cato\n'; else printf 'vpn\n'; fi
-      ;;
+    utun*) printf 'vpn\n' ;;
     *) printf 'direct\n' ;;
   esac
 }
 
-# default_route_class : wire the real route/pgrep commands into classify_route.
+# default_route_class : wire the real route command into classify_route.
 default_route_class() {
-  local iface cato=0
+  local iface
   iface=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')
-  if pgrep -f CatoClient >/dev/null 2>&1; then cato=1; fi
-  classify_route "$iface" "$cato"
+  classify_route "$iface"
 }
 
 # ping_probe <host> <count> : run ONE ping batch and echo "LOSS AVG" derived
@@ -76,7 +72,7 @@ ping_probe() {
 }
 
 # physical_gateway : echo the physical LAN router IP, independent of any VPN.
-# When Cato holds the default route via utun, `route -n get default` has no
+# When a VPN holds the default route via utun, `route -n get default` has no
 # gateway line, so we ask the active hardware interface for its router.
 # Honors an explicit GATEWAY override (from net-monitor.conf / env).
 # Returns 1 (no output) if none found.

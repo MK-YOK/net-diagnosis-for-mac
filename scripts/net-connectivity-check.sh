@@ -3,7 +3,7 @@
 # gateway / DNS / external reachability separately. Part of the
 # net-diagnosis-for-mac diagnostic pass (see run.sh). No side effects.
 # The gateway is the PHYSICAL LAN router (via physical_gateway), so it works
-# even when a VPN (Cato) owns the default route.
+# even when a VPN owns the default route.
 
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
