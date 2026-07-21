@@ -31,6 +31,8 @@ TICKS=0
 ANOMALIES=0
 WORST_GW=0
 WORST_EXT=0
+gwfile=""
+extfile=""
 
 emit() { echo "$1"; echo "$1" >> "$MON_LOG"; }
 
@@ -42,6 +44,7 @@ summary() {
   echo "監視時間: ${elapsed}s / tick 数: $TICKS / 異常検知: $ANOMALIES 件"
   echo "最悪 GW avg: ${WORST_GW}ms / 最悪 EXT avg: ${WORST_EXT}ms"
   echo "異常ログ: $MON_LOG"
+  rm -f "$gwfile" "$extfile" 2>/dev/null
   exit 0
 }
 trap summary INT
@@ -49,6 +52,7 @@ trap summary INT
 echo "監視開始（Ctrl-C で停止）。閾値: GW>${GW_SPIKE_MS}ms/loss>${GW_LOSS_PCT}%, EXT>${EXT_SPIKE_MS}ms/loss>${EXT_LOSS_PCT}%"
 
 while :; do
+  MON_LOG="$LOG_DIR/monitor-$(date +%Y%m%d).log"
   TICKS=$((TICKS + 1))
 
   GW=$(physical_gateway || true)
