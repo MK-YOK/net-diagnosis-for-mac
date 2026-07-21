@@ -841,6 +841,8 @@ TICKS=0
 ANOMALIES=0
 WORST_GW=0
 WORST_EXT=0
+gwfile=""    # set each tick; init so summary() can rm them under set -u
+extfile=""
 
 emit() { echo "$1"; echo "$1" >> "$MON_LOG"; }
 
@@ -852,6 +854,7 @@ summary() {
   echo "監視時間: ${elapsed}s / tick 数: $TICKS / 異常検知: $ANOMALIES 件"
   echo "最悪 GW avg: ${WORST_GW}ms / 最悪 EXT avg: ${WORST_EXT}ms"
   echo "異常ログ: $MON_LOG"
+  rm -f "$gwfile" "$extfile" 2>/dev/null   # don't leak temp files on Ctrl-C mid-tick
   exit 0
 }
 trap summary INT
@@ -860,6 +863,7 @@ echo "監視開始（Ctrl-C で停止）。閾値: GW>${GW_SPIKE_MS}ms/loss>${GW
 
 while :; do
   TICKS=$((TICKS + 1))
+  MON_LOG="$LOG_DIR/monitor-$(date +%Y%m%d).log"   # recompute so an overnight run rolls to the new day
 
   GW=$(physical_gateway || true)
   gwfile=$(mktemp); extfile=$(mktemp)
