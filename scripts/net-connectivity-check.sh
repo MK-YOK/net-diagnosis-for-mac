@@ -2,14 +2,18 @@
 # Read-only connectivity diagnostics, layered so a failure can be pinned to
 # gateway / DNS / external reachability separately. Part of the
 # net-diagnosis-for-mac diagnostic pass (see run.sh). No side effects.
+# The gateway is the PHYSICAL LAN router (via physical_gateway), so it works
+# even when a VPN (Cato) owns the default route.
 
 set -uo pipefail
+cd "$(dirname "$0")" || exit 1
+. "./lib/net-common.sh"
 
-GATEWAY=$(route -n get default 2>/dev/null | awk '/gateway:/{print $2}')
+GATEWAY=$(physical_gateway || true)
 
-echo "== Default gateway =="
+echo "== Default gateway (physical LAN router) =="
 if [ -z "$GATEWAY" ]; then
-  echo "No default gateway found — interface may be down or unconfigured."
+  echo "No physical gateway found — interface may be down or unconfigured."
 else
   echo "Gateway: $GATEWAY"
   echo

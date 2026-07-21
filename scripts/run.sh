@@ -13,6 +13,8 @@ cd "$(dirname "$0")" || exit 1
 
 ./net-interface-check.sh
 echo
+./net-cato-check.sh
+echo
 ./net-connectivity-check.sh
 echo
 ./net-wifi-check.sh

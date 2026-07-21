@@ -90,6 +90,27 @@ just feel that way"):
 The report flags the latest run's latency/loss against the average of all
 prior runs so a real regression shows up as a number, not a guess.
 
+## Continuous monitoring (intermittent faults)
+
+`./scripts/run.sh` is a one-shot snapshot. For a fault that comes and goes,
+run the monitor to catch it live:
+
+```bash
+./scripts/net-monitor.sh 30m   # watch for 30 min (omit for Ctrl-C to stop)
+```
+
+It stays quiet while healthy and prints a timestamped line only when gateway
+or external latency/loss crosses a threshold (configurable in
+`scripts/net-monitor.conf`), tagging each with whether Cato/VPN owned the
+route at that moment. Anomalies are also written to
+`logs/monitor-YYYYMMDD.log` (gitignored, local only).
+
+## Cato / VPN detection
+
+Each `run.sh` now reports whether Cato (or another VPN tunnel) owns the
+default route. It only reports and recommends a manual before/after
+comparison — it never disconnects anything.
+
 ## Repo structure
 
 ```

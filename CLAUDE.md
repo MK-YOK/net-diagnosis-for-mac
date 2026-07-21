@@ -84,6 +84,37 @@ otherwise pass with high latency or intermittent loss** — a signal-quality
 problem distinct from a router/gateway failure. Suggest moving closer to the
 access point or checking for interference sources, not a router restart.
 
+## Cato / VPN on the default route
+
+`net-cato-check.sh` reports whether a VPN tunnel — specifically Cato — owns
+the default route (`cato` / `vpn` / `direct` / `unknown`), and `run.sh` runs
+it right after the interface check. Cato has been the first suspect before and
+turned out innocent, so treat it as a **starting point for elimination, not a
+culprit**: when things are slow, recommend the user manually disconnect Cato
+and compare before/after. Never disconnect it yourself — that's a user action,
+like a router restart.
+
+**Physical gateway.** The GW figure everywhere (snapshot and monitor) is the
+**physical LAN router** via `physical_gateway`, not the default-route gateway.
+This matters because when Cato holds the default route, `route -n get default`
+has no gateway line at all (previously the GW ping was silently skipped). So
+"GW is fine but external is bad" vs "GW itself is bad" stays a valid
+router-vs-ISP split regardless of whether Cato is connected.
+
+## Catching intermittent faults (continuous monitoring)
+
+A single `run.sh` snapshot can't catch a fault that comes and goes. When the
+symptom is intermittent — "it was bad, now it's fine, now it's bad again" —
+use `./scripts/net-monitor.sh [duration]`. It pings the physical gateway and
+an external host every few seconds and prints a timestamped line only when a
+threshold is crossed, tagging each with the route class (`cato`/`vpn`/…) so
+you can see whether Cato was in the path when the spike happened. Thresholds
+live in `scripts/net-monitor.conf` (override per-run with env vars, e.g.
+`GW_SPIKE_MS=30 ./scripts/net-monitor.sh 30m`). Anomalies also append to
+`logs/monitor-YYYYMMDD.log`. Keep the non-committal tone: report which layer
+(GW / external) degraded and whether it correlates with Cato — don't over-
+conclude from one spike.
+
 ## Reporting
 
 Summarize which layer(s) failed (interface / gateway / DNS / external /

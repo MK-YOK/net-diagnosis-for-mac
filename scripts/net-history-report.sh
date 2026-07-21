@@ -24,9 +24,9 @@ awk -F, '
 NR==1 { next }
 {
   n++
-  gw_avg[n]=$7; gw_loss[n]=$6
-  extip_avg[n]=$11; extip_loss[n]=$10
-  exthost_avg[n]=$13; exthost_loss[n]=$12
+  gw_avg[n]=($7=="n/a")?"":$7; gw_loss[n]=($6=="n/a")?"":$6
+  extip_avg[n]=($11=="n/a")?"":$11; extip_loss[n]=($10=="n/a")?"":$10
+  exthost_avg[n]=($13=="n/a")?"":$13; exthost_loss[n]=($12=="n/a")?"":$12
   ts[n]=$1
 }
 function avg(arr, upto,    s, c, i) {

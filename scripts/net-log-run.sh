@@ -1,30 +1,32 @@
 #!/bin/bash
-# Runs the same core probes as net-connectivity-check.sh / net-wifi-check.sh,
-# but parses the results into one CSV row appended to logs/history.csv
-# instead of printing for a human. Called from run.sh on every diagnostic
-# pass, so history builds up automatically over time — no cron/launchd
-# needed. Read-only aside from appending to that one log file.
+# Runs the same core probes as the connectivity/wifi checks, but parses the
+# results into one CSV row appended to logs/history.csv instead of printing
+# for a human. Called from run.sh on every pass, so history builds up over
+# time — no cron/launchd needed. Read-only aside from appending to that log.
+# Gateway is the PHYSICAL LAN router (see physical_gateway) so the GW figure
+# is meaningful even when a VPN (Cato) owns the default route.
 
 set -uo pipefail
 cd "$(dirname "$0")" || exit 1
+. "./lib/net-common.sh"
 
 LOG_DIR="../logs"
 LOG_FILE="$LOG_DIR/history.csv"
-HEADER="timestamp,interface,link_status,has_ip,gateway_ip,gateway_loss_pct,gateway_avg_ms,dns_ok,dns_query_ms,ext_ip_loss_pct,ext_ip_avg_ms,ext_host_loss_pct,ext_host_avg_ms,wifi_rssi,wifi_noise,wifi_channel"
+HEADER="timestamp,interface,link_status,has_ip,gateway_ip,gateway_loss_pct,gateway_avg_ms,dns_ok,dns_query_ms,ext_ip_loss_pct,ext_ip_avg_ms,ext_host_loss_pct,ext_host_avg_ms,wifi_rssi,wifi_noise,wifi_channel,default_route"
+OLD_HEADER="timestamp,interface,link_status,has_ip,gateway_ip,gateway_loss_pct,gateway_avg_ms,dns_ok,dns_query_ms,ext_ip_loss_pct,ext_ip_avg_ms,ext_host_loss_pct,ext_host_avg_ms,wifi_rssi,wifi_noise,wifi_channel"
 
 mkdir -p "$LOG_DIR"
 if [ ! -f "$LOG_FILE" ]; then
   echo "$HEADER" > "$LOG_FILE"
+elif [ "$(head -1 "$LOG_FILE")" = "$OLD_HEADER" ]; then
+  # migrate old 16-col header to the new 17-col header, keep existing rows
+  tmpf=$(mktemp "$LOG_DIR/.history.csv.XXXXXX")
+  { echo "$HEADER"; tail -n +2 "$LOG_FILE"; } > "$tmpf" && mv "$tmpf" "$LOG_FILE"
 fi
-
-# -- ping stats: "N packets transmitted, M packets received, X.X% packet loss"
-# -- and (if any received) "round-trip min/avg/max/stddev = a/b/c/d ms"
-ping_loss() { grep -oE '[0-9.]+% packet loss' | grep -oE '^[0-9.]+'; }
-ping_avg()  { grep 'round-trip' | sed -E 's#.*= [0-9.]+/([0-9.]+)/.*#\1#'; }
 
 TIMESTAMP=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
-# -- interface --
+# -- interface owning the default route --
 IFACE=$(route -n get default 2>/dev/null | awk '/interface:/{print $2}')
 LINK_STATUS=""
 HAS_IP=0
@@ -33,14 +35,17 @@ if [ -n "$IFACE" ]; then
   ifconfig "$IFACE" 2>/dev/null | grep -q "inet " && HAS_IP=1
 fi
 
-# -- gateway --
-GATEWAY=$(route -n get default 2>/dev/null | awk '/gateway:/{print $2}')
+# -- default route classification (cato/vpn/direct/unknown) --
+DEFAULT_ROUTE=$(default_route_class)
+
+# -- gateway: physical LAN router, independent of any VPN default route --
+GATEWAY=$(physical_gateway || true)
 GW_LOSS=""
 GW_AVG=""
 if [ -n "$GATEWAY" ]; then
-  gw_output=$(ping -c 3 -t 5 "$GATEWAY" 2>&1)
-  GW_LOSS=$(echo "$gw_output" | ping_loss)
-  GW_AVG=$(echo "$gw_output" | ping_avg)
+  read GW_LOSS GW_AVG <<EOF
+$(ping_probe "$GATEWAY" 3)
+EOF
 fi
 
 # -- DNS --
@@ -50,13 +55,12 @@ echo "$dig_output" | grep -qE 'ANSWER: [1-9]' && DNS_OK=1
 DNS_MS=$(echo "$dig_output" | awk '/Query time:/{print $4}')
 
 # -- external reachability --
-extip_output=$(ping -c 3 -t 5 1.1.1.1 2>&1)
-EXTIP_LOSS=$(echo "$extip_output" | ping_loss)
-EXTIP_AVG=$(echo "$extip_output" | ping_avg)
-
-exthost_output=$(ping -c 3 -t 5 apple.com 2>&1)
-EXTHOST_LOSS=$(echo "$exthost_output" | ping_loss)
-EXTHOST_AVG=$(echo "$exthost_output" | ping_avg)
+read EXTIP_LOSS EXTIP_AVG <<EOF
+$(ping_probe 1.1.1.1 3)
+EOF
+read EXTHOST_LOSS EXTHOST_AVG <<EOF
+$(ping_probe apple.com 3)
+EOF
 
 # -- Wi-Fi (blank fields if not on Wi-Fi or wdutil needs a password) --
 WIFI_RSSI=""
@@ -69,4 +73,4 @@ if command -v wdutil >/dev/null 2>&1; then
   WIFI_CHANNEL=$(echo "$wifi_info" | awk -F': ' '/Channel/{print $2}' | grep -oE '^[0-9]+')
 fi
 
-echo "$TIMESTAMP,$IFACE,$LINK_STATUS,$HAS_IP,$GATEWAY,$GW_LOSS,$GW_AVG,$DNS_OK,$DNS_MS,$EXTIP_LOSS,$EXTIP_AVG,$EXTHOST_LOSS,$EXTHOST_AVG,$WIFI_RSSI,$WIFI_NOISE,$WIFI_CHANNEL" >> "$LOG_FILE"
+echo "$TIMESTAMP,$IFACE,$LINK_STATUS,$HAS_IP,$GATEWAY,$GW_LOSS,$GW_AVG,$DNS_OK,$DNS_MS,$EXTIP_LOSS,$EXTIP_AVG,$EXTHOST_LOSS,$EXTHOST_AVG,$WIFI_RSSI,$WIFI_NOISE,$WIFI_CHANNEL,$DEFAULT_ROUTE" >> "$LOG_FILE"

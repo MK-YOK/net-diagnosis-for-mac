@@ -303,6 +303,24 @@ $(ping_probe 127.0.0.1 2)
 PBEOF
 assert_eq "loopback loss is 0.0" "0.0" "$PB_LOSS"
 assert_false "loopback avg is numeric (not n/a)" [ "$PB_AVG" = "n/a" ]
+
+# --- ping_probe timeout must scale with count (regression: a fixed -t 5 would
+#     truncate the run to ~5 packets and report a clean result). Shadow `ping`
+#     to capture its args, so this is network-independent.
+PING_ARGS_FILE=$(mktemp)
+ping() {
+  printf '%s\n' "$*" > "$PING_ARGS_FILE"
+  cat <<'FAKEPING'
+--- fakehost ping statistics ---
+6 packets transmitted, 6 packets received, 0.0% packet loss
+round-trip min/avg/max/stddev = 1.0/2.0/3.0/0.1 ms
+FAKEPING
+}
+ping_probe fakehost 6 >/dev/null
+unset -f ping
+TVAL=$(grep -oE '\-t [0-9]+' "$PING_ARGS_FILE" | grep -oE '[0-9]+$')
+assert_true "ping_probe -t scales with count (>=6)" [ "${TVAL:-0}" -ge 6 ]
+rm -f "$PING_ARGS_FILE"
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -316,9 +334,11 @@ Expected: FAIL lines for the `ping_probe` asserts (`ping_probe: command not foun
 # ping_probe <host> <count> : run ONE ping batch and echo "LOSS AVG" derived
 # from the same sample. AVG is "n/a" when nothing returned (100% loss); LOSS
 # defaults to "100" if the summary can't be parsed at all (e.g. unknown host).
+# The overall timeout scales with count (macOS -t is a whole-run deadline), so
+# a larger PING_COUNT is never silently truncated.
 ping_probe() {
   local host="$1" count="$2" out loss avg
-  out=$(ping -c "$count" -t 5 "$host" 2>&1)
+  out=$(ping -c "$count" -t "$((count + 3))" "$host" 2>&1)
   loss=$(printf '%s\n' "$out" | ping_loss)
   avg=$(printf '%s\n' "$out" | ping_avg)
   [ -z "$loss" ] && loss="100"
@@ -330,7 +350,7 @@ ping_probe() {
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `./tests/run-tests.sh`
-Expected: `PASS=23 FAIL=0`, exit 0.
+Expected: `PASS=24 FAIL=0`, exit 0.
 
 - [ ] **Step 5: Commit**
 
@@ -462,7 +482,7 @@ load_thresholds() {
 - [ ] **Step 5: Run test to verify it passes**
 
 Run: `./tests/run-tests.sh`
-Expected: `PASS=26 FAIL=0`, exit 0.
+Expected: `PASS=27 FAIL=0`, exit 0.
 
 - [ ] **Step 6: Commit**
 
@@ -599,7 +619,7 @@ rm -rf "$MIG_DIR"
 - [ ] **Step 2: Run test to verify it passes as a spec of the behavior**
 
 Run: `./tests/run-tests.sh`
-Expected: `PASS=28 FAIL=0`. (This asserts the migration one-liner is correct before we embed it in the script.)
+Expected: `PASS=29 FAIL=0`. (This asserts the migration one-liner is correct before we embed it in the script.)
 
 - [ ] **Step 3: Rewrite `scripts/net-log-run.sh`** — full file:
 
@@ -625,8 +645,9 @@ mkdir -p "$LOG_DIR"
 if [ ! -f "$LOG_FILE" ]; then
   echo "$HEADER" > "$LOG_FILE"
 elif [ "$(head -1 "$LOG_FILE")" = "$OLD_HEADER" ]; then
-  # migrate old 16-col header to the new 17-col header, keep existing rows
-  tmpf=$(mktemp)
+  # migrate old 16-col header to the new 17-col header, keep existing rows.
+  # temp file lives in LOG_DIR so the mv is a same-filesystem atomic rename.
+  tmpf=$(mktemp "$LOG_DIR/.history.csv.XXXXXX")
   { echo "$HEADER"; tail -n +2 "$LOG_FILE"; } > "$tmpf" && mv "$tmpf" "$LOG_FILE"
 fi
 
@@ -714,6 +735,10 @@ REAL="../logs/history.csv"
 mkdir -p ../logs
 BAK=""
 if [ -f "$REAL" ]; then BAK=$(mktemp); cp "$REAL" "$BAK"; fi
+# Guard the real history file: restore on normal end AND on interruption
+# (Ctrl-C/crash) so the test can never clobber the user's real trend data.
+restore_hist() { if [ -n "$BAK" ]; then mv "$BAK" "$REAL"; else rm -f "$REAL"; fi; }
+trap restore_hist EXIT
 cat > "$REAL" <<'REPEOF'
 timestamp,interface,link_status,has_ip,gateway_ip,gateway_loss_pct,gateway_avg_ms,dns_ok,dns_query_ms,ext_ip_loss_pct,ext_ip_avg_ms,ext_host_loss_pct,ext_host_avg_ms,wifi_rssi,wifi_noise,wifi_channel,default_route
 2026-01-01T00:00:00Z,en0,active,1,192.168.0.1,0.0,2.0,1,5,0.0,10.0,0.0,12.0,-55,-90,36
@@ -722,7 +747,8 @@ REPEOF
 OUT=$(../scripts/net-history-report.sh 2>&1); RC=$?
 assert_eq "report exits 0 on n/a + mixed rows" "0" "$RC"
 if printf '%s' "$OUT" | grep -qi 'awk:'; then fail "report emitted an awk error"; else pass; fi
-if [ -n "$BAK" ]; then mv "$BAK" "$REAL"; else rm -f "$REAL"; fi
+restore_hist
+trap - EXIT
 ```
 
 - [ ] **Step 2: Run test to verify current behavior**
@@ -759,7 +785,7 @@ The existing `avg()` already skips `arr[i] != ""`, so normalized `n/a`→`""` va
 - [ ] **Step 4: Run test + smoke check**
 
 Run: `./tests/run-tests.sh`
-Expected: `PASS=30 FAIL=0`.
+Expected: `PASS=31 FAIL=0`.
 Then: `./scripts/net-history-report.sh`
 Expected: no `awk:` errors; the last-N table shows the `default_route` column (via `column -t`), and rows with `n/a` avg don't distort the trend deltas.
 
@@ -815,6 +841,8 @@ TICKS=0
 ANOMALIES=0
 WORST_GW=0
 WORST_EXT=0
+gwfile=""    # set each tick; init so summary() can rm them under set -u
+extfile=""
 
 emit() { echo "$1"; echo "$1" >> "$MON_LOG"; }
 
@@ -826,6 +854,7 @@ summary() {
   echo "監視時間: ${elapsed}s / tick 数: $TICKS / 異常検知: $ANOMALIES 件"
   echo "最悪 GW avg: ${WORST_GW}ms / 最悪 EXT avg: ${WORST_EXT}ms"
   echo "異常ログ: $MON_LOG"
+  rm -f "$gwfile" "$extfile" 2>/dev/null   # don't leak temp files on Ctrl-C mid-tick
   exit 0
 }
 trap summary INT
@@ -834,6 +863,7 @@ echo "監視開始（Ctrl-C で停止）。閾値: GW>${GW_SPIKE_MS}ms/loss>${GW
 
 while :; do
   TICKS=$((TICKS + 1))
+  MON_LOG="$LOG_DIR/monitor-$(date +%Y%m%d).log"   # recompute so an overnight run rolls to the new day
 
   GW=$(physical_gateway || true)
   gwfile=$(mktemp); extfile=$(mktemp)
